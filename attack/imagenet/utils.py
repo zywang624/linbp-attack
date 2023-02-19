@@ -29,8 +29,8 @@ class SelectedImagenet(Dataset):
         next(reader)
         self.selected_list = list(reader)
     def __getitem__(self, item):
-        target, target_name, image_name = self.selected_list[item]
-        image = Image.open(os.path.join(self.imagenet_val_dir, target_name, image_name))
+        image_name, target = self.selected_list[item]
+        image = Image.open(os.path.join(self.imagenet_val_dir, image_name))
         if image.mode != 'RGB':
             image = image.convert('RGB')
         if self.transform is not None:
