@@ -16,6 +16,7 @@ from PIL import Image
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epsilon', type=float, default=0.1)
+parser.add_argument('--model', type=str, default='res_50')
 parser.add_argument('--sgm_lambda', type=float, default=1.0)
 parser.add_argument('--niters', type=int, default=300)
 parser.add_argument('--ila_niters', type=int, default=100)
