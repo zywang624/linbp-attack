@@ -10,13 +10,16 @@ from torch.backends import cudnn
 import numpy as np
 from utils import SelectedImagenet, Normalize, input_diversity, \
     linbp_forw_resnet50, linbp_backw_resnet50, ila_forw_resnet50, ILAProjLoss
+from tqdm import tqdm
+from PIL import Image
+
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--epsilon', type=float, default=0.03)
+parser.add_argument('--epsilon', type=float, default=0.1)
 parser.add_argument('--sgm_lambda', type=float, default=1.0)
 parser.add_argument('--niters', type=int, default=300)
 parser.add_argument('--ila_niters', type=int, default=100)
-parser.add_argument('--method', type=str, default = 'linbp_ila_pgd')
+parser.add_argument('--method', type=str, default = 'linbp_ifgsm')
 parser.add_argument('--batch_size', type=int, default=200)
 parser.add_argument('--linbp_layer', type=str, default='3_1')
 parser.add_argument('--ila_layer', type=str, default='2_3')
@@ -24,6 +27,11 @@ parser.add_argument('--save_dir', type=str, default = '')
 parser.add_argument('--target_attack', default=False, action='store_true')
 args = parser.parse_args()
 
+
+def save_images(output_dir, adversaries, filenames):
+    adversaries = ((torch.round(adversaries.detach().permute((0,2,3,1))).cpu().numpy() * 255).astype(np.uint8))
+    for i, filename in enumerate(filenames):
+        Image.fromarray(adversaries[i]).save(os.path.join(output_dir, filename))
 
 
 if __name__ == '__main__':
@@ -36,7 +44,7 @@ if __name__ == '__main__':
 
 
     os.makedirs(args.save_dir, exist_ok=True)
-    epsilon = args.epsilon
+    epsilon = 16./255
     batch_size = args.batch_size
     method = args.method
     ila_layer = args.ila_layer
@@ -59,12 +67,12 @@ if __name__ == '__main__':
         T.CenterCrop((224,224)),
         T.ToTensor()
     ])
-    dataset = SelectedImagenet(imagenet_val_dir='data/imagenet/ILSVRC2012_img_val',
-                               selected_images_csv='data/imagenet/selected_imagenet.csv',
+    dataset = SelectedImagenet(imagenet_val_dir='data/images/',
+                               selected_images_csv='data/labels.csv',
                                transform=trans
                                )
     ori_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers = 8, pin_memory = False)
-    model = MODEL.resnet.resnet50(state_dict_dir ='attack/imagenet/models/ckpt/resnet50-19c8e357.pth')
+    model = MODEL.resnet.resnet50(num_classes=1000)
     model.eval()
     model = nn.Sequential(
             Normalize(),
@@ -75,7 +83,7 @@ if __name__ == '__main__':
     if target_attack:
         label_switch = torch.tensor(list(range(500,1000))+list(range(0,500))).long()
     label_ls = []
-    for ind, (ori_img, label)in enumerate(ori_loader):
+    for ind, (ori_img, label, filenames)in tqdm(enumerate(ori_loader)):
         label_ls.append(label)
         if target_attack:
             label = label_switch[label]
@@ -83,7 +91,7 @@ if __name__ == '__main__':
         ori_img = ori_img.to(device)
         img = ori_img.clone()
         m = 0
-        for i in range(niters):
+        for i in tqdm(range(niters)):
             # In our implementation of PGD, we incorporate randomness at each iteration to further enhance the transferability
             if 'pgd' in method:
                 img_x = img + img.new(img.size()).uniform_(-epsilon, epsilon)
@@ -148,9 +156,10 @@ if __name__ == '__main__':
                 img = torch.where(img < ori_img - epsilon, ori_img - epsilon, img)
                 img = torch.clamp(img, min=0, max=1)
             del mid_output, mid_original, mid_attack_original
-        np.save(save_dir + '/batch_{}.npy'.format(ind), torch.round(img.data*255).cpu().numpy().astype(np.uint8()))
+        save_images(save_dir, img, filenames)
+#         np.save(save_dir + '/batch_{}.npy'.format(ind), torch.round(img.data*255).cpu().numpy().astype(np.uint8()))
         del img, ori_img, input_grad
-        print('batch_{}.npy saved'.format(ind))
-    label_ls = torch.cat(label_ls)
-    np.save(save_dir + '/labels.npy', label_ls.numpy())
-    print('images saved')
+#         print('batch_{}.npy saved'.format(ind))
+#     label_ls = torch.cat(label_ls)
+#     np.save(save_dir + '/labels.npy', label_ls.numpy())
+    print('images saved to {}'.format(save_dir))

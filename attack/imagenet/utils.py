@@ -35,7 +35,7 @@ class SelectedImagenet(Dataset):
             image = image.convert('RGB')
         if self.transform is not None:
             image = self.transform(image)
-        return image, int(target)
+        return image, int(target), image_name
     def __len__(self):
         return len(self.selected_list)
 
