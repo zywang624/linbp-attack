@@ -215,6 +215,25 @@ def linbp_backw_resnet50(img, loss, conv_out_ls, ori_mask_ls, relu_out_ls, conv_
     return input_grad[0].data
 
 
+# vgg-19 forward
+def vgg19_forw(model, x, linbp, linbp_layer):
+    x = model[0](x)
+    for ind, mm in enumerate(model[1].features.module):
+        if linbp and isinstance(mm, nn.ReLU) and ind >= linbp_layer:
+            x = linbp_relu(x)
+        else:
+            x = mm(x)
+    x = x.view(x.size(0), -1)
+    x = model[1].classifier(x)
+    return x
+
+def vgg19_ila_forw(model, x, ila_layer):
+    x = model[0](x)
+    for ind, mm in enumerate(model[1].features.module):
+        x = mm(x)
+        if ind == ila_layer:
+            return x
+
 
 def ila_forw_resnet50(model, x, ila_layer):
     jj = int(ila_layer.split('_')[0])

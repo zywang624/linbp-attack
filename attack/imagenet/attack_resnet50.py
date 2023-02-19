@@ -30,7 +30,7 @@ args = parser.parse_args()
 
 
 def save_images(output_dir, adversaries, filenames):
-    adversaries = ((torch.round(adversaries.detach().permute((0,2,3,1))).cpu().numpy() * 255).astype(np.uint8))
+    adversaries = ((torch.round(adversaries.detach().permute((0,2,3,1))*255).cpu().numpy()).astype(np.uint8))
     for i, filename in enumerate(filenames):
         Image.fromarray(adversaries[i]).save(os.path.join(output_dir, filename))
 
@@ -45,7 +45,7 @@ if __name__ == '__main__':
 
 
     os.makedirs(args.save_dir, exist_ok=True)
-    epsilon = 16./255
+    epsilon = args.epsilon
     batch_size = args.batch_size
     method = args.method
     ila_layer = args.ila_layer
@@ -79,6 +79,8 @@ if __name__ == '__main__':
         model = MODEL.resnet.resnet101(num_classes=1000)
     elif args.model == "res_152":
         model = MODEL.resnet.resnet152(num_classes=1000)
+    elif args.model == "inc_v3":
+        model = MODEL.inceptionv3(num_classes=1000)
         
     model.eval()
     model = nn.Sequential(
@@ -107,27 +109,43 @@ if __name__ == '__main__':
             img_x.requires_grad_(True)
 
             if 'linbp' in method:
-                att_out, ori_mask_ls, conv_out_ls, relu_out_ls, conv_input_ls = linbp_forw_resnet50(model, img_x, True, linbp_layer)
-                pred = torch.argmax(att_out, dim=1).view(-1)
-                loss = nn.CrossEntropyLoss()(att_out, label.to(device))
-                model.zero_grad()
-                input_grad = linbp_backw_resnet50(img_x, loss, conv_out_ls, ori_mask_ls, relu_out_ls, conv_input_ls, xp=sgm_lambda)
-            else:
-                if method == 'mdi2fgsm' or method == 'linbp_mdi2fgsm':
-                    att_out = model(input_diversity(img_x))
+                if "res" in args.model:
+                    att_out, ori_mask_ls, conv_out_ls, relu_out_ls, conv_input_ls = linbp_forw_resnet50(model, img_x, True, linbp_layer)
+                    pred = torch.argmax(att_out, dim=1).view(-1)
+                    loss = nn.CrossEntropyLoss()(att_out, label.to(device))
+                    model.zero_grad()
+                    input_grad = linbp_backw_resnet50(img_x, loss, conv_out_ls, ori_mask_ls, relu_out_ls, conv_input_ls, xp=sgm_lambda)
                 else:
-                    att_out = model(img_x)
-                pred = torch.argmax(att_out, dim=1).view(-1)
-                loss = nn.CrossEntropyLoss()(att_out, label.to(device))
-                model.zero_grad()
-                loss.backward()
-                input_grad = img_x.grad.data
+                    output = vgg19_forw(model, input_diversity(img_x) if method == 'mdi2fgsm' or method == 'linbp_mdi2fgsm' else img_x, True, linbp_layer)
+                    loss = nn.CrossEntropyLoss()(output, label.to(device))
+                    model.zero_grad()
+                    loss.backward()
+            else:
+                if "res" == args.model:
+                    if method == 'mdi2fgsm' or method == 'linbp_mdi2fgsm':
+                        att_out = model(input_diversity(img_x))
+                    else:
+                        att_out = model(img_x)
+                    pred = torch.argmax(att_out, dim=1).view(-1)
+                    loss = nn.CrossEntropyLoss()(att_out, label.to(device))
+                    model.zero_grad()
+                    loss.backward()
+                    input_grad = img_x.grad.data
+                else:
+                    output = vgg19_forw(model, input_diversity(img_x) if method == 'mdi2fgsm' or method == 'linbp_mdi2fgsm' else img_x, False, None)
+                    loss.backward()
+                    input_grad = img_x.grad.data
             model.zero_grad()
             if 'mdi2fgsm' in method or 'mifgsm' in method:
-                input_grad = 1 * m + input_grad / torch.norm(input_grad, dim=(1, 2, 3), p=1, keepdim=True)
-                m = input_grad
+                if "res" in args.model:
+                    input_grad = 1 * m + input_grad / torch.norm(input_grad, dim=(1, 2, 3), p=1, keepdim=True)
+                    m = input_grad
+                else:
+                    g = img_x.grad.data
+                    input_grad = 1 * m + g / torch.norm(g, dim=(1, 2, 3), p=1, keepdim=True)
+                    m = input_grad
             if target_attack:
-                input_grad = - input_grad
+                input_grad = -input_grad
             if method == 'fgsm' or '_fgsm' in method:
                 img = img.data + 2 * epsilon * torch.sign(input_grad)
             else:
