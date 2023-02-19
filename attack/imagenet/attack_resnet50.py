@@ -15,7 +15,7 @@ from PIL import Image
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--epsilon', type=float, default=0.1)
+parser.add_argument('--epsilon', type=float, default=1.6 / 255)
 parser.add_argument('--model', type=str, default='res_50')
 parser.add_argument('--sgm_lambda', type=float, default=1.0)
 parser.add_argument('--niters', type=int, default=300)
@@ -30,7 +30,7 @@ args = parser.parse_args()
 
 
 def save_images(output_dir, adversaries, filenames):
-    adversaries = ((torch.round(adversaries.detach().permute((0,2,3,1))).cpu().numpy() * 255).astype(np.uint8))
+    adversaries = ((torch.round(adversaries.detach().permute((0,2,3,1))*255).cpu().numpy()).astype(np.uint8))
     for i, filename in enumerate(filenames):
         Image.fromarray(adversaries[i]).save(os.path.join(output_dir, filename))
 
@@ -45,7 +45,7 @@ if __name__ == '__main__':
 
 
     os.makedirs(args.save_dir, exist_ok=True)
-    epsilon = 16./255
+    epsilon = args.epsilon
     batch_size = args.batch_size
     method = args.method
     ila_layer = args.ila_layer
