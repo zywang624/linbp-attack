@@ -72,7 +72,13 @@ if __name__ == '__main__':
                                transform=trans
                                )
     ori_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers = 8, pin_memory = False)
-    model = MODEL.resnet.resnet50(num_classes=1000)
+    if args.model == "res_50":
+        model = MODEL.resnet.resnet50(num_classes=1000)
+    elif args.model == "res_101":
+        model = MODEL.resnet.resnet101(num_classes=1000)
+    elif args.model == "res_152":
+        model = MODEL.resnet.resnet152(num_classes=1000)
+        
     model.eval()
     model = nn.Sequential(
             Normalize(),

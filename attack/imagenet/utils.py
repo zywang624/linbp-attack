@@ -111,6 +111,52 @@ def linbp_forw_resnet50(model, x, do_linbp, linbp_layer):
     x = model[1].fc(x)
     return x, ori_mask_ls, conv_out_ls, relu_out_ls, conv_input_ls
 
+
+def linbp_forw_resnet101(model, x, do_linbp, linbp_layer):
+    jj = int(linbp_layer.split('_')[0])
+    kk = int(linbp_layer.split('_')[1])
+    x = model[0](x)
+    x = model[1].conv1(x)
+    x = model[1].bn1(x)
+    x = model[1].relu(x)
+    x = model[1].maxpool(x)
+    ori_mask_ls = []
+    conv_out_ls = []
+    relu_out_ls = []
+    conv_input_ls = []
+    def layer_forw(jj, kk, jj_now, kk_now, x, mm, ori_mask_ls, conv_out_ls, relu_out_ls, conv_input_ls, do_linbp):
+        if jj < jj_now:
+            x, ori_mask, conv_out, relu_out, conv_in = block_func(mm, x, linbp=True)
+            ori_mask_ls.append(ori_mask)
+            conv_out_ls.append(conv_out)
+            relu_out_ls.append(relu_out)
+            conv_input_ls.append(conv_in)
+        elif jj == jj_now:
+            if kk_now >= kk:
+                x, ori_mask, conv_out, relu_out, conv_in = block_func(mm, x, linbp=True)
+                ori_mask_ls.append(ori_mask)
+                conv_out_ls.append(conv_out)
+                relu_out_ls.append(relu_out)
+                conv_input_ls.append(conv_in)
+            else:
+                x, _, _, _, _ = block_func(mm, x, linbp=False)
+        else:
+            x, _, _, _, _ = block_func(mm, x, linbp=False)
+        return x, ori_mask_ls
+    for ind, mm in enumerate(model[1].layer1):
+        x, ori_mask_ls = layer_forw(jj, kk, 1, ind, x, mm, ori_mask_ls, conv_out_ls, relu_out_ls, conv_input_ls, do_linbp)
+    for ind, mm in enumerate(model[1].layer2):
+        x, ori_mask_ls = layer_forw(jj, kk, 2, ind, x, mm, ori_mask_ls, conv_out_ls, relu_out_ls, conv_input_ls, do_linbp)
+    for ind, mm in enumerate(model[1].layer3):
+        x, ori_mask_ls = layer_forw(jj, kk, 3, ind, x, mm, ori_mask_ls, conv_out_ls, relu_out_ls, conv_input_ls, do_linbp)
+    for ind, mm in enumerate(model[1].layer4):
+        x, ori_mask_ls = layer_forw(jj, kk, 4, ind, x, mm, ori_mask_ls, conv_out_ls, relu_out_ls, conv_input_ls, do_linbp)
+    x = model[1].avgpool(x)
+    x = torch.flatten(x, 1)
+    x = model[1].fc(x)
+    return x, ori_mask_ls, conv_out_ls, relu_out_ls, conv_input_ls
+
+
 def block_func(block, x, linbp):
     identity = x
     conv_in = x+0
