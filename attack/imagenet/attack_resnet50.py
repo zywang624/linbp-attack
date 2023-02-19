@@ -9,7 +9,7 @@ import models as MODEL
 from torch.backends import cudnn
 import numpy as np
 from utils import SelectedImagenet, Normalize, input_diversity, \
-    linbp_forw_resnet50, linbp_backw_resnet50, ila_forw_resnet50, ILAProjLoss
+    linbp_forw_resnet50, linbp_backw_resnet50, ila_forw_resnet50, ILAProjLoss, vgg19_forw
 from tqdm import tqdm
 from PIL import Image
 
